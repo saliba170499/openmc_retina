@@ -569,6 +569,43 @@ hid_t h5banktype()
   return banktype;
 }
 
+hid_t h5retinabanktype()
+{
+  // Create compound type for position
+  hid_t postype = H5Tcreate(H5T_COMPOUND, sizeof(struct Position));
+  H5Tinsert(postype, "x", HOFFSET(Position, x), H5T_NATIVE_DOUBLE);
+  H5Tinsert(postype, "y", HOFFSET(Position, y), H5T_NATIVE_DOUBLE);
+  H5Tinsert(postype, "z", HOFFSET(Position, z), H5T_NATIVE_DOUBLE);
+
+  // Create bank datatype
+  //
+  // If you make changes to the compound datatype here, make sure you update:
+  // - openmc/source.py
+  // - openmc/statepoint.py
+  // - docs/source/io_formats/statepoint.rst
+  // - docs/source/io_formats/source.rst
+  hid_t banktype = H5Tcreate(H5T_COMPOUND, sizeof(struct RetinaSite));
+  H5Tinsert(banktype, "r", HOFFSET(RetinaSite, r), postype);
+  H5Tinsert(banktype, "u", HOFFSET(RetinaSite, u), postype);
+  H5Tinsert(banktype, "E", HOFFSET(RetinaSite, E), H5T_NATIVE_DOUBLE);
+  H5Tinsert(banktype, "dE", HOFFSET(RetinaSite, dE), H5T_NATIVE_DOUBLE);
+  H5Tinsert(banktype, "time", HOFFSET(RetinaSite, time), H5T_NATIVE_DOUBLE);
+  H5Tinsert(banktype, "wgt", HOFFSET(RetinaSite, wgt), H5T_NATIVE_DOUBLE);
+  H5Tinsert(banktype, "event_mt", HOFFSET(RetinaSite, event_mt), H5T_NATIVE_INT);
+  H5Tinsert(banktype, "delayed_group", HOFFSET(RetinaSite, delayed_group),
+    H5T_NATIVE_INT);
+  H5Tinsert(banktype, "cell_id", HOFFSET(RetinaSite, cell_id), H5T_NATIVE_INT);
+  H5Tinsert(banktype, "nuclide_id", HOFFSET(RetinaSite, nuclide_id), H5T_NATIVE_INT);
+  H5Tinsert(banktype, "mat_id", HOFFSET(RetinaSite, mat_id), H5T_NATIVE_INT);
+  H5Tinsert(banktype, "univ_id", HOFFSET(RetinaSite, univ_id), H5T_NATIVE_INT);
+  H5Tinsert(
+    banktype, "particle", HOFFSET(RetinaSite, particle), H5T_NATIVE_INT);
+  H5Tinsert(banktype, "parent_id", HOFFSET(RetinaSite,parent_id), H5T_NATIVE_LONG);
+  H5Tinsert(banktype, "progeny_id", HOFFSET(RetinaSite,progeny_id), H5T_NATIVE_LONG);
+  H5Tclose(postype);
+  return banktype;
+}
+
 void write_source_point(std::string filename, gsl::span<SourceSite> source_bank,
   const vector<int64_t>& bank_index, bool use_mcpl)
 {
@@ -582,6 +619,44 @@ void write_source_point(std::string filename, gsl::span<SourceSite> source_bank,
   } else {
     write_h5_source_point(filename.c_str(), source_bank, bank_index);
   }
+}
+
+void write_retina_source_point(const char* filename, gsl::span<RetinaSite> retina_bank,
+  const vector<int64_t>& bank_index)
+{
+  // When using parallel HDF5, the file is written to collectively by all
+  // processes. With MPI-only, the file is opened and written by the master
+  // (note that the call to write_source_bank is by all processes since slave
+  // processes need to send source bank data to the master.
+#ifdef PHDF5
+  bool parallel = true;
+#else
+  bool parallel = false;
+#endif
+
+  if (!filename)
+    fatal_error("write_retina_source_point filename needs a nonempty name.");
+
+  std::string filename_(filename);
+  const auto extension = get_file_extension(filename_);
+  if (extension == "") {
+    filename_.append(".h5");
+  } else if (extension != "h5") {
+    warning("write_source_point was passed a file extension differing "
+            "from .h5, but an hdf5 file will be written.");
+  }
+
+  hid_t file_id;
+  if (mpi::master || parallel) {
+    file_id = file_open(filename_.c_str(), 'w', true);
+    write_attribute(file_id, "filetype", "source");
+  }
+
+  // Get pointer to source bank and write to file
+  write_retina_source_bank(file_id, retina_bank, bank_index);
+
+  if (mpi::master || parallel)
+    file_close(file_id);
 }
 
 void write_h5_source_point(const char* filename,
@@ -709,6 +784,101 @@ void write_source_bank(hid_t group_id, gsl::span<SourceSite> source_bank,
   } else {
 #ifdef OPENMC_MPI
     MPI_Send(source_bank.data(), count_size, mpi::source_site, 0, mpi::rank,
+      mpi::intracomm);
+#endif
+  }
+#endif
+
+  H5Tclose(banktype);
+}
+
+void write_retina_source_bank(hid_t group_id, gsl::span<RetinaSite> retina_bank,
+  const vector<int64_t>& bank_index)
+{
+  hid_t banktype = h5retinabanktype();
+
+  // Set total and individual process dataspace sizes for source bank
+  int64_t dims_size = bank_index.back();
+  int64_t count_size = bank_index[mpi::rank + 1] - bank_index[mpi::rank];
+
+#ifdef PHDF5
+  // Set size of total dataspace for all procs and rank
+  hsize_t dims[] {static_cast<hsize_t>(dims_size)};
+  hid_t dspace = H5Screate_simple(1, dims, nullptr);
+  hid_t dset = H5Dcreate(group_id, "retina_bank", banktype, dspace, H5P_DEFAULT,
+    H5P_DEFAULT, H5P_DEFAULT);
+
+  // Create another data space but for each proc individually
+  hsize_t count[] {static_cast<hsize_t>(count_size)};
+  hid_t memspace = H5Screate_simple(1, count, nullptr);
+
+  // Select hyperslab for this dataspace
+  hsize_t start[] {static_cast<hsize_t>(bank_index[mpi::rank])};
+  H5Sselect_hyperslab(dspace, H5S_SELECT_SET, start, nullptr, count, nullptr);
+
+  // Set up the property list for parallel writing
+  hid_t plist = H5Pcreate(H5P_DATASET_XFER);
+  H5Pset_dxpl_mpio(plist, H5FD_MPIO_COLLECTIVE);
+
+  // Write data to file in parallel
+  H5Dwrite(dset, banktype, memspace, dspace, plist, retina_bank.data());
+
+  // Free resources
+  H5Sclose(dspace);
+  H5Sclose(memspace);
+  H5Dclose(dset);
+  H5Pclose(plist);
+
+#else
+
+  if (mpi::master) {
+    // Create dataset big enough to hold all source sites
+    hsize_t dims[] {static_cast<hsize_t>(dims_size)};
+    hid_t dspace = H5Screate_simple(1, dims, nullptr);
+    hid_t dset = H5Dcreate(group_id, "retina_bank", banktype, dspace,
+      H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+
+    // Save source bank sites since the array is overwritten below
+#ifdef OPENMC_MPI
+    vector<RetinaSite> temp_retina {retina_bank.begin(), retina_bank.end()};
+#endif
+
+    for (int i = 0; i < mpi::n_procs; ++i) {
+      // Create memory space
+      hsize_t count[] {static_cast<hsize_t>(bank_index[i + 1] - bank_index[i])};
+      hid_t memspace = H5Screate_simple(1, count, nullptr);
+
+#ifdef OPENMC_MPI
+      // Receive source sites from other processes
+      if (i > 0)
+        MPI_Recv(retina_bank.data(), count[0], mpi::retina_site, i, i,
+          mpi::intracomm, MPI_STATUS_IGNORE);
+#endif
+
+      // Select hyperslab for this dataspace
+      dspace = H5Dget_space(dset);
+      hsize_t start[] {static_cast<hsize_t>(bank_index[i])};
+      H5Sselect_hyperslab(
+        dspace, H5S_SELECT_SET, start, nullptr, count, nullptr);
+
+      // Write data to hyperslab
+      H5Dwrite(
+        dset, banktype, memspace, dspace, H5P_DEFAULT, retina_bank.data());
+
+      H5Sclose(memspace);
+      H5Sclose(dspace);
+    }
+
+    // Close all ids
+    H5Dclose(dset);
+
+#ifdef OPENMC_MPI
+    // Restore state of source bank
+    std::copy(temp_retina.begin(), temp_retina.end(), retina_bank.begin());
+#endif
+  } else {
+#ifdef OPENMC_MPI
+    MPI_Send(retina_bank.data(), count_size, mpi::retina_site, 0, mpi::rank,
       mpi::intracomm);
 #endif
   }

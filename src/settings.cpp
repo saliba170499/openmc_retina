@@ -60,6 +60,8 @@ bool photon_transport {false};
 bool reduce_tallies {true};
 bool res_scat_on {false};
 bool restart_run {false};
+bool retina_track {false}; 
+bool retina_mcpl_write {false};
 bool run_CE {true};
 bool source_latest {false};
 bool source_separate {false};
@@ -118,6 +120,13 @@ SolverType solver_type {SolverType::MONTE_CARLO};
 std::unordered_set<int> sourcepoint_batch;
 std::unordered_set<int> statepoint_batch;
 std::unordered_set<int> source_write_surf_id;
+std::unordered_set<int> retina_cell_id;  
+std::unordered_set<int> retina_mt_number; 
+std::unordered_set<int> retina_univ_id; 
+std::unordered_set<int> retina_mat_id; 
+std::unordered_set<int> retina_nuclide_id;
+double E_threshold {0}; 
+int64_t max_retina_particles; 
 int64_t ssw_max_particles;
 int64_t ssw_max_files;
 int64_t ssw_cell_id {C_NONE};
@@ -846,6 +855,71 @@ void read_settings_xml(pugi::xml_node root)
     }
   }
 
+  //RETINA 
+  if (check_for_node(root, "retina_track")) 
+  {
+    retina_track = true;
+    // Get surface source write node
+    xml_node node_ssw = root.child("retina_track");
+    // Determine surface ids at which crossing particles are to be banked
+    if (check_for_node(node_ssw, "cell_ids")) {
+      auto temp = get_node_array<int>(node_ssw, "cell_ids");
+      for (const auto& b : temp) {
+        retina_cell_id.insert(b);
+      }
+    }
+    if (check_for_node(node_ssw, "mt_numbers")) {
+      auto temp = get_node_array<int>(node_ssw, "mt_numbers");
+      for (const auto& b : temp) {
+        retina_mt_number.insert(b);
+      }
+    }
+    if (check_for_node(node_ssw, "univ_ids")) {
+      auto temp = get_node_array<int>(node_ssw, "univ_ids");
+      for (const auto& b : temp) {
+        retina_univ_id.insert(b);
+      }
+    }
+    if (check_for_node(node_ssw, "mat_ids")) {
+      auto temp = get_node_array<int>(node_ssw, "mat_ids");
+      for (const auto& b : temp) {
+        retina_mat_id.insert(b);
+      }
+    }
+    if (check_for_node(node_ssw, "nuclide_ids")) {
+      auto temp = get_node_array<int>(node_ssw, "nuclide_ids");
+       for (const auto& b : temp) {
+        retina_nuclide_id.insert(b);
+        }
+    }
+    if (check_for_node(node_ssw, "E_threshold")) {
+      max_retina_particles =
+        std::stoll(get_node_value(node_ssw, "E_threshold"));
+    if (check_for_node(node_ssw, "E_threshold")) {
+      E_threshold =
+        std::stoll(get_node_value(node_ssw, "E_threshold"));
+      }
+    }
+    if (check_for_node(node_ssw, "max_particles")) {
+      max_retina_particles =
+        std::stoll(get_node_value(node_ssw, "max_particles"));
+    // Get maximum number of particles to be banked per surface
+    if (check_for_node(node_ssw, "max_particles")) {
+      max_retina_particles =
+        std::stoll(get_node_value(node_ssw, "max_particles"));
+    }
+    }
+    if (check_for_node(node_ssw, "mcpl")) {
+      retina_mcpl_write = get_node_value_bool(node_ssw, "mcpl");
+
+      // Make sure MCPL support is enabled
+      if (retina_mcpl_write && !MCPL_ENABLED) {
+        fatal_error("Your build of OpenMC does not support writing MCPL "
+                    "surface source files.");
+      }
+    }
+  }
+
   // If source is not separate and is to be written out in the statepoint file,
   // make sure that the sourcepoint batch numbers are contained in the
   // statepoint list
@@ -1103,6 +1177,10 @@ void free_memory_settings()
   settings::sourcepoint_batch.clear();
   settings::source_write_surf_id.clear();
   settings::res_scat_nuclides.clear();
+  settings::retina_cell_id.clear();   
+  settings::retina_mt_number.clear();
+  settings::retina_univ_id.clear();
+  settings::retina_mat_id.clear();
 }
 
 //==============================================================================

@@ -336,6 +336,44 @@ void Particle::event_collide()
     collision_mg(*this);
   }
 
+  // RETINA feature to track single interactions
+  if(settings::retina_track)
+  {
+
+    if(fission())
+    {
+      event_mt() = 18;
+    }
+    int cellID = model::cells[this->lowest_coord().cell]->id_;
+    int Nucl = 1000* data::nuclides[event_nuclide()]->Z_ + data::nuclides[event_nuclide()]->A_; 
+    int UnivID = model::universes[this->lowest_coord().universe]->id_;
+    double Delta_E = E_last() - E();
+    int MaterialID= model::materials[material()]->id_; 
+    
+    // ADD THOSE INFORMATION TO RETINA-SITE  
+   if (retina_conditions(cellID, event_mt(), Nucl,UnivID, MaterialID, Delta_E))
+   {  
+      RetinaSite site;
+      site.r = r();
+      site.u = u();
+      site.E = E_last();
+      site.dE = Delta_E;
+      site.time = time();
+      site.wgt = wgt();
+      site.event_mt = event_mt();
+      site.delayed_group = delayed_group();
+      site.cell_id = cellID;
+      site.nuclide_id = Nucl;
+      site.mat_id = MaterialID;
+      site.univ_id = UnivID;
+      site.particle = type();
+      site.parent_id = id();
+      site.progeny_id = n_progeny();
+      int64_t idx = simulation::retina_bank.thread_safe_append(site);
+    }
+  }
+
+
   // Score collision estimator tallies -- this is done after a collision
   // has occurred rather than before because we need information on the
   // outgoing energy for any tallies with an outgoing energy filter
@@ -968,5 +1006,36 @@ void add_surf_source_to_bank(Particle& p, const Surface& surf)
   site.progeny_id = p.n_progeny();
   int64_t idx = simulation::surf_source_bank.thread_safe_append(site);
 }
+
+
+bool retina_conditions(int CellID, int EventMT, int Nucl, int univid, int matid, double DE)
+{ 
+  
+  bool cond = true;
+  // Condition if the particle is in an Active Batch
+  cond = cond && (simulation::current_batch > settings::n_inactive);
+  // Condition if maximum number of particle is met
+  cond = cond && (!simulation::retina_bank.full());
+  // Condition if the particle is in targeted cell
+  cond = cond && (settings::retina_cell_id.empty() || 
+          settings::retina_cell_id.find(CellID) != settings::retina_cell_id.end());
+  // Condition if the particle undergo the targeted MT reaction
+  cond = cond && (settings::retina_mt_number.empty() || 
+      settings::retina_mt_number.find(EventMT) != settings::retina_mt_number.end());
+  // Condition if the particle is in the targeted universe  
+  cond = cond && (settings::retina_univ_id.empty() || 
+      settings::retina_univ_id.find(univid) != settings::retina_univ_id.end());
+  // Condition if the particle is in the targeted material  
+  cond = cond && (settings::retina_mat_id.empty() || 
+      settings::retina_mat_id.find(matid) != settings::retina_mat_id.end());
+  cond = cond && (settings::retina_nuclide_id.empty() || 
+      settings::retina_nuclide_id.find(Nucl) != settings::retina_nuclide_id.end());
+  //Energy deposited should be superior to a threshold. Used heavily in Scatter Detectors
+  cond = cond && (settings::E_threshold == 0 ||  settings::E_threshold < DE);
+
+  return cond;
+
+}
+
 
 } // namespace openmc

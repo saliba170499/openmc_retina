@@ -40,9 +40,15 @@ void write_h5_source_point(const char* filename,
 void write_source_point(std::string, gsl::span<SourceSite> source_bank,
   const vector<int64_t>& bank_index, bool use_mcpl);
 
+void write_retina_source_point(const char* filename, gsl::span<RetinaSite> retina_bank,
+  const vector<int64_t>& bank_index);
+
 // This appends a source bank specification to an HDF5 file
 // that's already open. It is used internally by write_source_point.
 void write_source_bank(hid_t group_id, gsl::span<SourceSite> source_bank,
+  const vector<int64_t>& bank_index);
+
+void write_retina_source_bank(hid_t group_id, gsl::span<RetinaSite> retina_bank,
   const vector<int64_t>& bank_index);
 
 void read_source_bank(

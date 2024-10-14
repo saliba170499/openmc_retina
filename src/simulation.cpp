@@ -341,6 +341,11 @@ void allocate_banks()
     // Allocate surface source bank
     simulation::surf_source_bank.reserve(settings::ssw_max_particles);
   }
+
+  if (settings::retina_track) {
+    // Allocate retina source bank
+    simulation::retina_bank.reserve(settings::max_retina_particles);
+  }
 }
 
 void initialize_batch()
@@ -483,6 +488,21 @@ void finalize_batch()
         simulation::surf_source_bank.reserve(settings::ssw_max_particles);
       }
       ++simulation::ssw_current_file;
+    }
+  }
+  // Write retina if requested
+  if (settings::retina_track   &&
+      simulation::current_batch == settings::n_batches) {
+    auto filename = settings::path_output + "retina";
+    auto retina_work_index =
+      mpi::calculate_parallel_index_vector(simulation::retina_bank.size());
+    gsl::span<RetinaSite> retinabankspan(simulation::retina_bank.begin(),
+      simulation::retina_bank.size());
+    if (settings::retina_mcpl_write) {
+        write_mcpl_retina_point(filename.c_str(), retinabankspan, retina_work_index);
+    } 
+    else {
+      write_retina_source_point(filename.c_str(), retinabankspan, retina_work_index);
     }
   }
 }

@@ -170,6 +170,9 @@ int openmc_finalize()
 #ifdef OPENMC_MPI
   if (mpi::source_site != MPI_DATATYPE_NULL)
     MPI_Type_free(&mpi::source_site);
+    
+  if (mpi::retina_site != MPI_DATATYPE_NULL)
+    MPI_Type_free(&mpi::retina_site);
 #endif
 
   return 0;

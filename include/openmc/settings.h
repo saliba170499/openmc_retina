@@ -52,6 +52,8 @@ extern "C" bool photon_transport;  //!< photon transport turned on?
 extern "C" bool reduce_tallies;    //!< reduce tallies at end of batch?
 extern bool res_scat_on;           //!< use resonance upscattering method?
 extern "C" bool restart_run;       //!< restart run?
+extern bool retina_mcpl_write;      //!< flag for mcpl?
+extern "C" bool retina_track; //!< flag to use retina feature?
 extern "C" bool run_CE;            //!< run with continuous-energy data?
 extern bool source_latest;         //!< write latest source at each batch?
 extern bool source_separate;       //!< write source to separate file?
@@ -129,7 +131,19 @@ extern std::unordered_set<int>
   statepoint_batch; //!< Batches when state should be written
 extern std::unordered_set<int>
   source_write_surf_id; //!< Surface ids where sources will be written
-
+extern std::unordered_set<int> 
+  retina_cell_id; //!< Cell ids where sources will be written
+extern std::unordered_set<int> 
+  retina_mt_number; //!< MT Numbers where sources will be written
+extern std::unordered_set<int> 
+  retina_univ_id; //!< Universe IDs where sources will be written
+extern std::unordered_set<int> 
+  retina_mat_id; //!< Material IDs where sources will be written
+extern std::unordered_set<int> 
+  retina_nuclide_id; //!< Nuclide IDs where sources will be written
+  
+extern double E_threshold; // Threshold energy for activation
+extern int64_t max_retina_particles;  //!<Maximum events recoreded by RETINA?
 extern int
   max_history_splits; //!< maximum number of particle splits for weight windows
 extern int64_t ssw_max_particles; //!< maximum number of particles to be

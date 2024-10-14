@@ -129,6 +129,8 @@ ParticleType str_to_particle_type(std::string str);
 
 void add_surf_source_to_bank(Particle& p, const Surface& surf);
 
+bool retina_conditions(int CellID, int EventMT, int Nucl, int univid, int matid, double DE);
+
 } // namespace openmc
 
 #endif // OPENMC_PARTICLE_H

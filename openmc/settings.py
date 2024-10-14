@@ -345,6 +345,8 @@ class Settings:
         self._surf_source_read = {}
         self._surf_source_write = {}
 
+        self._retina = {}
+
         self._no_reduce = None
 
         self._verbosity = None
@@ -748,6 +750,63 @@ class Settings:
                 cv.check_greater_than(name, value, 0)
 
         self._surf_source_write = surf_source_write
+
+    @property
+    def retina(self) -> dict:
+        return self._retina
+    
+    @retina.setter
+    def retina(self, retina: dict):
+        #print('Test Test 1 2 3 hurray ! :D')
+        cv.check_type('retina source writing options', retina, Mapping)
+        for key, value in retina.items():
+            cv.check_value('retina key', key,
+                           ('cell_ids', 'mt_numbers', 'univ_ids', 'mat_ids', 'nuclide_ids', \
+                            'E_threshold', 'max_particles', 'mcpl'))
+            if key == 'cell_ids':
+                cv.check_type('cell ids for Retina banking', value,
+                              Iterable, Integral)
+                for cell_id in value:
+                    cv.check_greater_than('Cell id for retina banking',
+                                          cell_id, 0)
+            elif key == 'mt_numbers':
+                cv.check_type('MT numbers for retina banking', value,
+                              Iterable, Integral)
+                for mt_number in value:
+                    cv.check_greater_than('MT number for retina banking',
+                                          mt_number, 0)
+            elif key == 'univ_ids':
+                cv.check_type('Universe ids for retina banking', value,
+                              Iterable, Integral)
+                for univ_id in value:
+                    cv.check_greater_than('Universe id for retina banking',
+                                          univ_id, 0)
+            elif key == 'mat_ids':
+                cv.check_type('Material ids for retina banking', value,
+                              Iterable, Integral)
+                for mat_id in value:
+                    cv.check_greater_than('Material id for retina banking',
+                                          mat_id, 0)
+            elif key == 'nuclide_ids':
+                cv.check_type('Nuclide ids for retina banking', value,
+                              Iterable, Integral)
+                for nuclide_id in value:
+                    cv.check_greater_than('Nuclide id for retina banking',
+                                          nuclide_id, 0)
+            elif key == 'E_threshold':
+                cv.check_type('Energy Thresgold to track the event',
+                              value, Integral)
+                cv.check_greater_than('Energy Threshold to be banked in retina',
+                                      value, 0)
+            elif key == 'max_particles':
+                cv.check_type('maximum particle banks on surfaces per process',
+                              value, Integral)
+                cv.check_greater_than('maximum particle banks in retina per process',
+                                      value, 0)
+            elif key == 'mcpl':
+                cv.check_type('write to an MCPL-format file', value, bool)
+
+        self._retina = retina
 
     @property
     def no_reduce(self) -> bool:
@@ -1265,6 +1324,40 @@ class Settings:
                     subelement = ET.SubElement(element, key)
                     subelement.text = str(self._surf_source_write[key])
 
+    def _create_retina_subelement(self, root):
+        if self._retina:
+            element = ET.SubElement(root, "retina_track")
+            if 'cell_ids' in self._retina:
+                subelement = ET.SubElement(element, "cell_ids")
+                subelement.text = ' '.join(
+                    str(x) for x in self._retina['cell_ids'])
+            if 'mt_numbers' in self._retina:
+                subelement = ET.SubElement(element, "mt_numbers")
+                subelement.text = ' '.join(
+                    str(x) for x in self._retina['mt_numbers'])
+            if 'univ_ids' in self._retina:
+                subelement = ET.SubElement(element, "univ_ids")
+                subelement.text = ' '.join(
+                    str(x) for x in self._retina['univ_ids'])
+            if 'mat_ids' in self._retina:
+                subelement = ET.SubElement(element, "mat_ids")
+                subelement.text = ' '.join(
+                    str(x) for x in self._retina['mat_ids'])
+            if 'nuclide_ids' in self._retina:
+                subelement = ET.SubElement(element, "nuclide_ids")
+                subelement.text = ' '.join(
+                    str(x) for x in self._retina['nuclide_ids'])
+            if 'E_threshold' in self._retina:
+                subelement = ET.SubElement(element, "E_threshold")
+                subelement.text = str(self._retina['E_threshold'])
+            if 'max_particles' in self._retina:
+                subelement = ET.SubElement(element, "max_particles")
+                subelement.text = str(self._retina['max_particles'])
+            if 'mcpl' in self._retina:
+                subelement = ET.SubElement(element, "mcpl")
+                subelement.text = str(self._retina['mcpl']).lower()
+
+
     def _create_confidence_intervals(self, root):
         if self._confidence_intervals is not None:
             element = ET.SubElement(root, "confidence_intervals")
@@ -1671,6 +1764,31 @@ class Settings:
                 elif key in ('max_particles', 'max_source_files', 'cell', 'cellfrom', 'cellto'):
                     value = int(value)
                 self.surf_source_write[key] = value
+            
+    def _retina_from_xml_element(self, root):
+        elem = root.find('retina_track')
+        if elem is not None:
+            for key in ('cell_ids', 'mt_numbers', 'univ_ids', 'mat_ids', 'nuclide_ids', \
+                            'E_threshold', 'max_particles', 'mcpl'):
+                value = get_text(elem, key)
+                if value is not None:
+                    if key == 'cell_ids':
+                        value = [int(x) for x in value.split()]
+                    elif key == 'mt_numbers':
+                        value = [int(x) for x in value.split()]
+                    elif key == 'univ_ids':
+                        value = [int(x) for x in value.split()]
+                    elif key == 'mat_ids':
+                        value = [int(x) for x in value.split()]
+                    elif key == 'nuclide_ids':
+                        value = [int(x) for x in value.split()]
+                    elif key in ('E_threshold'):
+                        value = float(value)
+                    elif key in ('max_particles'):
+                        value = int(value)
+                    elif key == 'mcpl':
+                        value = value in ('true', '1')
+                    self.retina[key] = value
 
     def _confidence_intervals_from_xml_element(self, root):
         text = get_text(root, 'confidence_intervals')
@@ -1943,6 +2061,7 @@ class Settings:
         self._create_sourcepoint_subelement(element)
         self._create_surf_source_read_subelement(element)
         self._create_surf_source_write_subelement(element)
+        self._create_retina_subelement(element)
         self._create_confidence_intervals(element)
         self._create_electron_treatment_subelement(element)
         self._create_energy_mode_subelement(element)
@@ -2049,6 +2168,7 @@ class Settings:
         settings._sourcepoint_from_xml_element(elem)
         settings._surf_source_read_from_xml_element(elem)
         settings._surf_source_write_from_xml_element(elem)
+        settings._retina_from_xml_element(elem) 
         settings._confidence_intervals_from_xml_element(elem)
         settings._electron_treatment_from_xml_element(elem)
         settings._energy_mode_from_xml_element(elem)

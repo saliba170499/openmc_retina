@@ -175,6 +175,44 @@ void initialize_mpi(MPI_Comm intracomm)
     MPI_DOUBLE, MPI_INT, MPI_INT, MPI_INT, MPI_LONG, MPI_LONG};
   MPI_Type_create_struct(10, blocks, disp, types, &mpi::source_site);
   MPI_Type_commit(&mpi::source_site);
+
+
+  int blocks[] {3, 3, 1, 1, 1, 1, 1, 1, 1, 1};
+  MPI_Datatype types[] {MPI_DOUBLE, MPI_DOUBLE, MPI_DOUBLE, MPI_DOUBLE,
+    MPI_DOUBLE, MPI_INT, MPI_INT, MPI_INT, MPI_LONG, MPI_LONG};
+  MPI_Type_create_struct(10, blocks, disp, types, &mpi::source_site);
+  MPI_Type_commit(&mpi::source_site);
+
+  if(settings::retina_track)
+  {
+    RetinaSite b;
+    MPI_Aint disp[15];
+    MPI_Get_address(&b.r, &disp[0]);                //Double
+    MPI_Get_address(&b.u, &disp[1]);                //Double
+    MPI_Get_address(&b.E, &disp[2]);                //Double
+    MPI_Get_address(&b.dE, &disp[3]);               //Double
+    MPI_Get_address(&b.time, &disp[4]);             //Double
+    MPI_Get_address(&b.wgt, &disp[5]);              //Double
+    MPI_Get_address(&b.event_mt, &disp[6]);         //Int
+    MPI_Get_address(&b.delayed_group, &disp[7]);    //Int
+    MPI_Get_address(&b.cell_id, &disp[8]);          //Int
+    MPI_Get_address(&b.nuclide_id, &disp[9]);          //Int
+    MPI_Get_address(&b.mat_id, &disp[10]);          //Int
+    MPI_Get_address(&b.univ_id, &disp[11]);          //Int
+    MPI_Get_address(&b.particle, &disp[12]);         //Int
+    MPI_Get_address(&b.parent_id, &disp[13]);       //Long
+    MPI_Get_address(&b.progeny_id, &disp[14]);      //Long
+    for (int i = 14; i >= 0; --i) {
+      disp[i] -= disp[0];
+    }
+    
+    int blocks[] = {3, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+    MPI_Datatype types[] = {MPI_DOUBLE, MPI_DOUBLE, MPI_DOUBLE, MPI_DOUBLE,
+        MPI_DOUBLE, MPI_DOUBLE, MPI_INT, MPI_INT, MPI_INT, MPI_INT, MPI_INT, MPI_INT, MPI_INT, MPI_LONG, MPI_LONG};
+
+    MPI_Type_create_struct(15, blocks, disp, types, &mpi::retina_site);
+    MPI_Type_commit(&mpi::retina_site);
+  }
 }
 #endif // OPENMC_MPI
 
